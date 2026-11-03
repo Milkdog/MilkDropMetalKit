@@ -5,13 +5,16 @@
 # `tart-golden`, never hardcoded), boots it headless with no audio path to the host (`--no-audio`) and the guest
 # output muted, runs the steps, pulls the results back to build/vm-tests/<run-id>/, and deletes the clone.
 #
-# Usage: scripts/run-tests-vm.sh [--head] [--frames] [--screens] [--record SECONDS] [--app] [--preset PATH]
+# Usage: scripts/run-tests-vm.sh [--head] [--frames] [--screens] [--record SECONDS] [--app] [--classic] [--preset PATH]
 #                                [--count N] [--every K] [--size WxH] [--compat DIR [--compat-stride N] ...]
 #   --head          test the last commit (git archive HEAD) instead of the working tree
 #   --frames        render the preset offscreen with milkview-demo: every Kth of N frames → frames/<preset>/NNNN.png
 #   --screens       open milkview-demo's window and take screenshots of it → screens/
 #   --record N      record N seconds of milkview-demo's window with screencapture → recordings/<preset>.mov
 #   --app           build the MilkDrop Gallery bundle (ad hoc signed) and screenshot it on two presets → screens/
+#   --classic       render the classic Winamp visualization (ClassicVisualizer) at ×4 in every mode and style:
+#                   every 7th of 120 frames → classic/<mode>-<style>[-…]/NNNN.png, each checked against the CPU path;
+#                   plus window screenshots of the analyzer and the scope → screens/classic-<mode>-window.png
 #   --preset PATH   preset for the capture steps, relative to the repo (default: none, the renderer's defaults).
 #                   A directory renders every .milk in it with --frames; the window steps then use the first.
 #   --corpus DIR    also render every .milk under DIR (any host path, e.g. Corpus/…) with --frames; the files are
@@ -29,7 +32,7 @@
 #   build      swift build --build-tests, and a release build of milkview-demo (a failure skips everything below)
 #   tests      swift test --skip-build
 #   metal      the guest's GPU and Metal support (system_profiler) → metal-device.txt
-#   frames, screens, record, app, compat   only when asked
+#   frames, screens, record, app, classic, classic-window, compat   only when asked
 # Exit codes: 0 pass, 1 a step failed (or the host's coreaudiod started IO during the run), 2 bad arguments,
 #             3 infrastructure (the guest never came up or was lost): not a code problem, rerun.
 
@@ -40,6 +43,7 @@ FRAMES=0
 SCREENS=0
 RECORD=0
 APP=0
+CLASSIC=0
 CORPUS=""
 PRESET=""
 NEXT=""
@@ -54,6 +58,7 @@ while (( $#args )); do
     --screens) SCREENS=1 ;;
     --record) RECORD=${args[1]:-}; shift args 2>/dev/null; [[ "$RECORD" == <1-120> ]] || { print -r -- "--record needs 1-120 seconds" >&2; exit 2 } ;;
     --app) APP=1 ;;
+    --classic) CLASSIC=1 ;;
     --corpus) CORPUS=${args[1]:-}; shift args 2>/dev/null; [[ -d "$CORPUS" ]] || { print -r -- "--corpus needs a directory" >&2; exit 2 }; CORPUS=${CORPUS:A} ;;
     --count) COUNT=${args[1]:-}; shift args 2>/dev/null; [[ "$COUNT" == <1-100000> ]] || { print -r -- "--count needs a number" >&2; exit 2 } ;;
     --every) EVERY=${args[1]:-}; shift args 2>/dev/null; [[ "$EVERY" == <1-100000> ]] || { print -r -- "--every needs a number" >&2; exit 2 } ;;
@@ -86,7 +91,7 @@ fi
 PRESET=${PRESETS[1]:-}
 # File names for captures: anything outside [A-Za-z0-9._-] becomes "_", since preset names have spaces and "!".
 PRESET_NAME=${${${PRESET:t:r}:-default}//[^A-Za-z0-9._-]/_}
-CAPTURE=$(( SCREENS || RECORD || APP ))
+CAPTURE=$(( SCREENS || RECORD || APP || CLASSIC ))
 
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 CLONE="milkdrop-test-$RUN_ID"
@@ -350,6 +355,47 @@ if (( APP )); then
     ls -l $GUEST_RESULTS/screens"
 fi
 
+if (( CLASSIC )); then
+  # Name and milkview-demo options of each capture: every mode, every analyzer and scope style, both band widths,
+  # no peaks, the fastest falloff and the windowshade size.
+  classic_runs=(
+    analyzer-normal-thick "--vis analyzer --style normal --bands thick"
+    analyzer-fire-thick "--vis analyzer --style fire --bands thick"
+    analyzer-line-thick "--vis analyzer --style line --bands thick"
+    analyzer-normal-thin "--vis analyzer --style normal --bands thin"
+    analyzer-fire-thin "--vis analyzer --style fire --bands thin"
+    analyzer-line-thin "--vis analyzer --style line --bands thin"
+    analyzer-normal-thick-nopeaks "--vis analyzer --style normal --bands thick --no-peaks"
+    analyzer-fire-thick-fastest "--vis analyzer --style fire --bands thick --falloff 5 --peak-falloff 5"
+    analyzer-normal-thick-shade "--vis analyzer --style normal --bands thick --shade"
+    scope-dots "--vis oscilloscope --style dots"
+    scope-lines "--vis oscilloscope --style lines"
+    scope-solid "--vis oscilloscope --style solid"
+    off "--vis off"
+  )
+  # Every 7th of 120 frames: the demo's beat is 30 frames long at 60 fps, so a multiple of 30 (the frames step's
+  # default) would catch every capture at the same, quiet, point in the beat.
+  classic_cmd="bad=0; "
+  for name opts in $classic_runs; do
+    classic_cmd+="echo '--- $name'; $DEMO_BIN classic-frames $opts --out $GUEST_RESULTS/classic/$name --count 120 --every 7 || { echo \"classic failed: $name\"; bad=1; }; "
+  done
+  run_step classic "${classic_cmd}exit \$bad"
+
+  # The analyzer (fire) and the scope (solid) in ClassicVisualizerView, captured from their windows.
+  classic_window_cmd="mkdir -p $GUEST_RESULTS/screens; "
+  for vis style in analyzer fire oscilloscope solid; do
+    classic_window_cmd+="$DEMO_BIN classic-window --vis $vis --style $style --seconds 6 --origin $WIN_X,$WIN_Y > /tmp/classic-$vis.out 2>&1 &
+      demo=\$!
+      for i in {1..40}; do grep -q '^window ' /tmp/classic-$vis.out && break; sleep 0.5; done
+      cat /tmp/classic-$vis.out
+      WID=\$(awk '/^window / { print \$2 }' /tmp/classic-$vis.out)
+      [[ -n \$WID ]] || { echo 'classic-window never showed its window'; exit 1; }
+      sleep 3; screencapture -x -l \$WID $GUEST_RESULTS/screens/classic-$vis-window.png
+      wait \$demo; "
+  done
+  run_step classic-window "${classic_window_cmd}ls -l $GUEST_RESULTS/screens"
+fi
+
 if [[ -n "$COMPAT" ]]; then
   # Started detached, then polled with short execs; progress lines go to compat.log.
   step_order+=(compat)
@@ -402,7 +448,7 @@ for name in $step_order; do
   if [[ $name == compat ]]; then
     lines=$( { grep -E '^compat [0-9]+ presets, [0-9]+ already|restarting|gave up|^timeout |^crash ' "$RESULTS_DIR/$name.log" | head -12; awk '/^compat finished/ { f = 1 } f' "$RESULTS_DIR/$name.log"; } || true)
   elif [[ ${step_rc[$name]} == 0 ]]; then
-    lines=$(grep -E 'Build complete|Test run with|^frames |^device |^window |\.(png|mov)$|Chipset Model|Metal' "$RESULTS_DIR/$name.log" | tail -6 || true)
+    lines=$(grep -E 'Build complete|Test run with|^frames |^device |^window |\.(png|mov)$|^classic gpu|Chipset Model|Metal' "$RESULTS_DIR/$name.log" | tail -6 || true)
   else
     lines=$(grep -E 'error:|✘|FAIL|failed|never|no recording|still running' "$RESULTS_DIR/$name.log" | head -20 || true)
     [[ -n "$lines" ]] || lines=$(tail -15 "$RESULTS_DIR/$name.log")

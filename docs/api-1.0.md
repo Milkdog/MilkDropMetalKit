@@ -49,6 +49,27 @@ A dash marks a public symbol with no doc comment.
 | `MilkView` | `@MainActor final class: NSView` | `renderer` (—), `init(renderer:frame:) throws(MilkRendererError)` (—), and four `NSView` overrides |
 | ~~`MilkViewError`~~ | — | Removed: folded into `MilkRendererError.noCommandQueue` (F2) |
 
+#### Added in 1.1 (additive; nothing above changed)
+
+| Symbol | Kind | Notes |
+|---|---|---|
+| `ClassicVisualizer` | `@MainActor final class` | Winamp 2's classic analyzer and scope (`ClassicVisualizer.swift`) |
+| `init()`, `init(sharingAudioWith: MilkRenderer)` | inits | Own audio input, or read a renderer's feed (one ring, separate playheads and analysis) |
+| `feed(samples:channels:sampleRate:)` | `nonisolated` func | Same contract as `MilkRenderer.feed`; shared visualizers write the renderer's ring |
+| `render(time:) -> [UInt8]` | func | `width × height` RGBA, rows from the top; all zero in `.off` |
+| `render(to:commandBuffer:time:)` | func | Any colour-renderable format, nearest-neighbour scaled; never waits on the GPU |
+| `reset()` | func | Bars, peaks, clock; its own audio (not a shared renderer's) |
+| `mode`, `analyzerStyle`, `analyzerBands`, `barFalloff`, `showsPeaks`, `peakFalloff`, `scopeStyle`, `palette`, `size` | vars | Defaults `.analyzer`, `.normal`, `.thick`, `.moderate`, `true`, `.moderate`, `.lines`, `.default`, `.mainWindow` |
+| `width`, `height` | get | 76 (72 windowshade) × 16 |
+| `Mode`, `AnalyzerStyle`, `AnalyzerBands`, `ScopeStyle`, `Size` | `String`, `Sendable`, `CaseIterable` enums | `analyzer`/`oscilloscope`/`off`; `normal`/`fire`/`line`; `thick`/`thin`; `dots`/`lines`/`solid`; `mainWindow`/`windowshade` (`width`, `height`) |
+| `Falloff` | `Int`, `Sendable`, `CaseIterable` enum | `slowest` = 1 … `fastest` = 5; `barRate`, `peakRate` in rows per second |
+| `ClassicVisPalette` | `Sendable, Hashable` struct | `colors` (always 24), subscript, `init(colors:)`, `init(viscolorText:fallback:)`, `init(viscolorData:fallback:)`, `default`; `count`, `backgroundIndex`, `gridIndex`, `analyzerIndices`, `oscilloscopeIndices`, `peakIndex` |
+| `ClassicVisPalette.Color` | `Sendable, Hashable` struct | `red`, `green`, `blue: UInt8`; memberwise init |
+| `ClassicVisualizerView` | `@MainActor final class: NSView` | `visualizer`, `init(visualizer:device:frame:) throws(MilkRendererError)`, the same four `NSView` overrides as `MilkView` |
+
+`MilkView` couldn't be generalised to draw a `ClassicVisualizer` without changing its 1.0 API (`renderer:
+MilkRenderer`, `init(renderer:frame:)`), so `ClassicVisualizerView` is a separate class with the same shape.
+
 ### MilkPresetFormat
 
 | Symbol | Kind | Notes |

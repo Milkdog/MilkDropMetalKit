@@ -71,6 +71,30 @@ texture's pixel format must equal the renderer's `pixelFormat`, and you must com
 the renderer keeps up to three frames in flight and waits for one to complete, so an uncommitted buffer stalls the
 main thread a few frames later.
 
+### Classic Winamp visualization (1.1)
+
+`ClassicVisualizer` draws Winamp 2's main-window display: the 76×16 spectrum analyzer and oscilloscope, in the 24
+colours of a skin's `viscolor.txt`.
+
+```swift
+// Shares the renderer's feed: the tap still calls renderer.feed once, and both draw from it.
+let classic = ClassicVisualizer(sharingAudioWith: renderer)   // or ClassicVisualizer() and classic.feed(...)
+classic.mode = .analyzer                  // .oscilloscope, .off
+classic.analyzerStyle = .fire             // .normal, .line; analyzerBands .thick (19 bars) or .thin (76)
+classic.barFalloff = .fast                // five speeds, .slowest … .fastest; peakFalloff, showsPeaks
+classic.scopeStyle = .solid               // .dots, .lines
+classic.palette = ClassicVisPalette(viscolorText: skinViscolorText)   // never fails; bad lines keep the default
+
+let rgba = classic.render(time: t)        // 76×16 RGBA bytes, row by row from the top, to draw yourself
+let view = try ClassicVisualizerView(visualizer: classic, device: device)   // or a view: give it 152×32 for ×2
+```
+
+`render(to:commandBuffer:time:)` draws into any Metal texture, scaled up with nearest-neighbour filtering, and never
+waits on the GPU. In `.off` mode every pixel is transparent, so a skin's background shows through. `size =
+.windowshade` gives the 72×16 display of the playlist editor's windowshade bar. A visualizer that shares a
+renderer's feed still runs on its own clock with its own (small) analysis, so it keeps drawing while the MilkDrop
+window is closed.
+
 ## Modules
 
 `MilkMetal` is the one library product. The other modules are internal to the package (`package` access), or
@@ -78,7 +102,7 @@ executables.
 
 | Module | Kind | Role | Status |
 |---|---|---|---|
-| `MilkMetal` | Library product | `MilkRenderer`, `MilkPreset`, `MilkView`, audio input and analysis | Working: the full MilkDrop 1 and 2 frame |
+| `MilkMetal` | Library product | `MilkRenderer`, `MilkPreset`, `MilkView`, audio input and analysis; `ClassicVisualizer` (1.1) | Working: the full MilkDrop 1 and 2 frame, and Winamp's classic analyzer and scope |
 | `MilkPresetFormat` | Internal | `.milk` → `PresetModel` (settings, equations, shader bodies). No Metal. | Working |
 | `MilkEEL` | Internal | ns-eel2 expression language → slot-resolved closure tree | Working: full function set, `megabuf`, loops |
 | `MilkShaders` | Internal | MilkDrop 2 HLSL → Metal translator and the shader prelude | Working ([docs/shaders.md](docs/shaders.md)) |
@@ -101,7 +125,8 @@ scripts/make-dmg.sh --notary-profile <profile>   # also notarized and stapled, s
 ```
 
 Space plays and pauses, ⌘[ and ⌘] step through presets, ⌘I toggles the info card, and the timer button
-auto-advances every 20 seconds. It's also the reference for embedding `MilkView` in SwiftUI (`MilkDropView` in
+auto-advances every 20 seconds. The transport bar has a classic Winamp display: click it to switch between analyzer,
+scope and off, and right-click for its styles. It's also the reference for embedding `MilkView` in SwiftUI (`MilkDropView` in
 `Sources/MilkDropGallery/ContentView.swift`) and feeding it from AVAudioEngine (`AudioPlayer.swift`: the mixer's
 tap feeds the renderer directly).
 
@@ -113,6 +138,7 @@ scripts/run-tests-vm.sh                          # tests in a Tart VM
 scripts/run-tests-vm.sh --record 15 --preset Presets/spike-tunnel.milk   # plus a 15 s screen recording
 scripts/run-tests-vm.sh --frames --every 10 --preset Presets/echo.milk --next Presets/shader-glow.milk   # a transition
 scripts/run-tests-vm.sh --compat Corpus/presets-cream-of-the-crop --compat-stride 50   # sampled compatibility run
+scripts/run-tests-vm.sh --classic                # the classic visualization in every mode and style, as PNGs
 swift run milkconvert inspect path/to/presets/   # parse every .milk file and report failures
 swift run milkconvert shaders --compile path/to/presets/   # translate and compile every MilkDrop 2 shader
 swift run milkconvert convert --out Converted/ path/to/presets/   # write .milkpreset bundles

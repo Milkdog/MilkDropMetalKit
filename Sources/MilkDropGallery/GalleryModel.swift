@@ -43,6 +43,8 @@ final class GalleryModel {
     static let transitionTime: TimeInterval = 2.7
 
     let renderer: MilkRenderer?
+    /// The classic Winamp display in the transport bar. It shares the renderer's audio feed, so the tap feeds once.
+    let classic: ClassicVisualizer?
     let audio: AudioPlayer
     private(set) var setupError: String?
     private(set) var sections: [GallerySection] = []
@@ -68,6 +70,7 @@ final class GalleryModel {
             setupError = "This Mac has no Metal device."
         }
         self.renderer = renderer
+        classic = renderer.map { ClassicVisualizer(sharingAudioWith: $0) }
         audio = AudioPlayer(renderer: renderer)
 
         do {

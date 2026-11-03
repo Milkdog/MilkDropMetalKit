@@ -4,6 +4,33 @@ All notable changes to MilkDropMetalKit. The format follows [Keep a Changelog](h
 and from 1.0.0 the package follows [Semantic Versioning](https://semver.org) as described in
 [docs/api-1.0.md §5](docs/api-1.0.md#5-semver-policy).
 
+## 1.1.0 — Unreleased
+
+Additive: no 1.0 API changes.
+
+### Added
+
+- `ClassicVisualizer`: Winamp 2's classic main-window visualization, written fresh from its documented options. A
+  76×16 display (or the 72×16 windowshade one, `size = .windowshade`) in three modes: the spectrum analyzer, the
+  oscilloscope and off (transparent).
+  - Analyzer: thick bands (19 bars, 3 px wide with 1 px gaps) or thin (one bar per column) on a log-frequency axis
+    from 50 Hz to 16 kHz, with heights on a dB scale; `normal`, `fire` and `line` colouring; five bar falloff
+    speeds; peak markers with their own five speeds.
+  - Oscilloscope: `dots`, `lines` and `solid` (filled from the centre line).
+  - Audio as for `MilkRenderer`: `feed` takes any chunk size and the visualizer paces it. Or
+    `init(sharingAudioWith:)` reads a renderer's feed, so one tap drives both; each keeps its own clock and analysis.
+  - `render(time:)` returns the frame as RGBA bytes; `render(to:commandBuffer:time:)` draws it into any Metal
+    texture, scaled with nearest-neighbour filtering, and never waits on the GPU. `reset()`.
+- `ClassicVisPalette`: the 24 colours, in `viscolor.txt` order. `init(viscolorText:fallback:)` and
+  `init(viscolorData:fallback:)` parse a skin's file and never fail: comments after `//`, junk lines, any separators,
+  out-of-range values and short files are all handled, with `fallback` (the new `default` palette, a green analyzer)
+  for anything unreadable.
+- `ClassicVisualizerView`: an `NSView` that draws a `ClassicVisualizer` on every display refresh.
+- MilkDrop Gallery: a classic display in the transport bar, sharing the renderer's feed (click to switch modes,
+  right-click for styles).
+- `milkview-demo classic-frames` and `classic-window`, and `scripts/run-tests-vm.sh --classic`, which renders every
+  mode and style at ×4 to PNG (each frame checked against the CPU path) and screenshots the view.
+
 ## 1.0.0 — 2026-10-30
 
 The first tagged release. `MilkMetal` is the only library product: `MilkRenderer`, `MilkPreset`, `MilkView` and

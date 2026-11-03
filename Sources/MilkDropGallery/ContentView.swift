@@ -1,4 +1,5 @@
 import AppKit
+import Metal
 import MilkMetal
 import SwiftUI
 
@@ -136,6 +137,9 @@ private struct TransportBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            if let classic = model.classic, let device = model.renderer?.device {
+                ClassicStrip(visualizer: classic, device: device)
+            }
             Button { model.chooseAudioFile() } label: { Label("Open Audio…", systemImage: "music.note") }
                 .help("Choose an audio file to play (⌘O); or drop one on the window")
             Button { audio.togglePlayback() } label: {
@@ -186,6 +190,66 @@ private struct TransportBar: View {
         let s = Int(seconds.rounded(.down))
         return String(format: "%d:%02d", s / 60, s % 60)
     }
+}
+
+/// The classic Winamp display at ×2, sharing the renderer's audio. A click cycles analyzer, scope and off, as in
+/// Winamp; the context menu has the styles.
+private struct ClassicStrip: View {
+    let visualizer: ClassicVisualizer
+    let device: MTLDevice
+    /// Mirrors the visualizer's settings so the menu shows check marks (the visualizer isn't observable).
+    @State private var mode = ClassicVisualizer.Mode.analyzer
+    @State private var analyzerStyle = ClassicVisualizer.AnalyzerStyle.normal
+    @State private var scopeStyle = ClassicVisualizer.ScopeStyle.lines
+    @State private var bands = ClassicVisualizer.AnalyzerBands.thick
+    @State private var peaks = true
+
+    var body: some View {
+        ClassicDisplay(visualizer: visualizer, device: device)
+            .frame(width: CGFloat(visualizer.width * 2), height: CGFloat(visualizer.height * 2))
+            .background(Color.black)
+            .overlay(Color.clear.contentShape(Rectangle()).onTapGesture { cycle() })
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+            .help("Classic visualization: click to switch analyzer, scope and off; right-click for styles")
+            .contextMenu {
+                Picker("Mode", selection: bind(\.mode, $mode)) {
+                    ForEach(ClassicVisualizer.Mode.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                }
+                Picker("Analyzer Style", selection: bind(\.analyzerStyle, $analyzerStyle)) {
+                    ForEach(ClassicVisualizer.AnalyzerStyle.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                }
+                Picker("Analyzer Bands", selection: bind(\.analyzerBands, $bands)) {
+                    ForEach(ClassicVisualizer.AnalyzerBands.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                }
+                Toggle("Peaks", isOn: bind(\.showsPeaks, $peaks))
+                Picker("Scope Style", selection: bind(\.scopeStyle, $scopeStyle)) {
+                    ForEach(ClassicVisualizer.ScopeStyle.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                }
+            }
+    }
+
+    private func cycle() {
+        let all = ClassicVisualizer.Mode.allCases
+        mode = all[(all.firstIndex(of: visualizer.mode)! + 1) % all.count]
+        visualizer.mode = mode
+    }
+
+    /// A binding that sets both the visualizer's property and the mirror.
+    private func bind<T>(_ key: ReferenceWritableKeyPath<ClassicVisualizer, T>, _ mirror: Binding<T>) -> Binding<T> {
+        Binding(get: { mirror.wrappedValue }, set: { visualizer[keyPath: key] = $0; mirror.wrappedValue = $0 })
+    }
+}
+
+/// `ClassicVisualizerView` in SwiftUI.
+private struct ClassicDisplay: NSViewRepresentable {
+    let visualizer: ClassicVisualizer
+    let device: MTLDevice
+
+    func makeNSView(context: Context) -> NSView {
+        (try? ClassicVisualizerView(visualizer: visualizer, device: device)) ?? NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 /// `MilkView` in SwiftUI. The view draws itself on every display refresh, so there's nothing to update.

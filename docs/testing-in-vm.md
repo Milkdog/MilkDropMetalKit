@@ -51,6 +51,7 @@ scripts/run-tests-vm.sh --record 15         # also record 15 s of MilkView as a 
 scripts/run-tests-vm.sh --preset Presets/spike-tunnel.milk --frames --screens --record 15   # the usual capture run
 scripts/run-tests-vm.sh --preset Presets --frames --every 100   # 3 frames of every preset in the folder
 scripts/run-tests-vm.sh --app               # build the MilkDrop Gallery .app and screenshot it
+scripts/run-tests-vm.sh --classic           # the classic Winamp visualization, every mode and style, as PNGs
 scripts/run-tests-vm.sh --corpus ~/sample --frames --every 100   # render presets from any host folder
 scripts/run-tests-vm.sh --compat Corpus/presets-cream-of-the-crop --compat-stride 50   # sampled compatibility run
 ```
@@ -64,6 +65,14 @@ frames and fitting sizes, which is how a layout that overflowed the window was f
 `.milk` under a host folder (for example a sample of the git-ignored `Corpus/`) into the run's snapshot and renders
 each with `--frames`; without `--preset`, the window steps use its first preset. Translating and compiling a whole
 pack's shaders doesn't need the VM (it draws nothing): `swift run milkconvert shaders --compile Corpus/…`.
+
+`--classic` renders `ClassicVisualizer` offscreen with `milkview-demo classic-frames` at ×4 (304×64, nearest
+neighbour), fed by the same generated signal, once per mode and style: the three analyzer styles in thick and thin
+bands, no peaks, the fastest falloff, the windowshade size, the three scope styles, and off. It writes every 7th of
+120 frames, whatever `--count` and `--every` say: the signal's beat is 30 frames long, so sampling every 30th
+would catch the same quiet moment each time. Each frame written is drawn on the GPU and compared with the CPU path's pixels, and the step fails
+on any difference (`classic gpu/cpu mismatches 0` in the log). The `classic-window` step then screenshots
+`ClassicVisualizerView` showing the analyzer and the scope.
 
 `--compat DIR` is the compatibility run ([compatibility.md](compatibility.md)): it copies every `.milk` under DIR,
 keeping the folders, renders each offscreen with `milkview-demo compat` and brings back `report.jsonl` (one line
@@ -81,8 +90,9 @@ build/vm-tests/<run-id>/
 ├── summary.txt          PASS/FAIL per step, plus the lines that matter from each log
 ├── <step>.log           full output of each step
 ├── frames/<preset>/     offscreen frames, NNNN.png (--frames)
+├── classic/<run>/       classic visualization frames at ×4, NNNN.png, e.g. analyzer-fire-thick, scope-solid (--classic)
 ├── screens/             <preset>-window.png (the window alone) and <preset>-display.png (the whole screen) (--screens);
-│                        gallery-<preset>.png (--app)
+│                        gallery-<preset>.png (--app); classic-analyzer-window.png, classic-oscilloscope-window.png (--classic)
 ├── recordings/          screen recordings, <preset>.mov (--record)
 ├── report.jsonl         one JSON line per preset (--compat); summary.json, the totals; compat.log, its progress
 └── metal-device.txt     the guest's Metal device and GPU families (milkview-demo info)

@@ -23,6 +23,16 @@ import UniformTypeIdentifiers
 //                        [--budget-ms MS] [--cpu-budget-ms MS] [--stride N] [--limit N]
 //       renders every .milk under DIR offscreen and appends one JSON line per preset to FILE; see
 //       docs/compatibility.md. Resumes from FILE; exits 0 once every preset has a record.
+//
+//   milkview-demo classic-frames --out DIR [classic options] [--count N] [--every K]
+//       renders the classic Winamp visualization (ClassicVisualizer) offscreen at a 60 fps clock, scaled up with
+//       nearest-neighbour filtering, and writes every Kth frame as DIR/NNNN.png; each frame drawn on the GPU is
+//       checked against the CPU path's pixels
+//   milkview-demo classic-window [classic options] [--seconds N] [--origin X,Y]
+//       ClassicVisualizerView in a borderless window; prints the window line as `window` does
+//   classic options: [--vis analyzer|oscilloscope|off] [--style normal|fire|line|dots|lines|solid]
+//       [--bands thick|thin] [--falloff 1-5] [--peak-falloff 1-5] [--no-peaks] [--shade] [--scale N (default 4)]
+//       [--palette viscolor.txt]
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data(("milkview-demo: " + message + "\n").utf8))
@@ -51,6 +61,7 @@ struct Options {
     var cpuBudgetMs = 2.0
     var stride = 1
     var limit: Int?
+    var classic = ClassicOptions()
 
     init(_ arguments: [String]) {
         var args = arguments[...]
@@ -90,7 +101,8 @@ struct Options {
                     fail("unknown pattern \(name)")
                 }
                 pattern = p
-            default: fail("unknown option \(flag)")
+            default:
+                guard classic.parse(flag, value: { value(flag) }) else { fail("unknown option \(flag)") }
             }
         }
         // compat renders many presets, so its defaults are smaller.
@@ -253,13 +265,15 @@ MainActor.assumeIsolated {
         renderFrames()
     case "compat":
         runCompat(options)
-    case "window":
+    case "classic-frames":
+        renderClassicFrames()
+    case "window", "classic-window":
         let app = NSApplication.shared
-        let delegate = DemoApp()
+        let delegate: NSApplicationDelegate = options.mode == "window" ? DemoApp() : ClassicDemoApp()
         app.delegate = delegate
         app.setActivationPolicy(.regular)
         app.run()
     default:
-        fail("usage: milkview-demo info|window|frames|compat [options]")
+        fail("usage: milkview-demo info|window|frames|compat|classic-frames|classic-window [options]")
     }
 }

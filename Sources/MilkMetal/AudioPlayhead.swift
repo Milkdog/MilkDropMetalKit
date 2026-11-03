@@ -45,6 +45,15 @@ struct AudioPlayhead {
     /// While playing out silence: the frame the host stopped at and the virtual position past it.
     private var silence: (validEnd: Int64, end: Double)?
 
+    /// A playhead for a stream that already has `frame` frames in it: what was fed before is never heard, and
+    /// playback starts with the next frame fed. For a second reader joining a ring that's already being fed (a
+    /// `ClassicVisualizer` sharing a `MilkRenderer`'s audio), so it trails the feed by one chunk, not `maxLatency`.
+    init(startingAt frame: Int64) {
+        startFrom = max(0, frame)
+    }
+
+    init() {}
+
     /// The most frames that may wait ahead of the playhead at `sampleRate`, within a ring of `capacity` frames that
     /// also has to hold the `windowSize` frames behind it.
     static func maxLag(sampleRate: Double, capacity: Int, windowSize: Int) -> Int64 {
