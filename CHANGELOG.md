@@ -4,7 +4,7 @@ All notable changes to MilkDropMetalKit. The format follows [Keep a Changelog](h
 and from 1.0.0 the package follows [Semantic Versioning](https://semver.org) as described in
 [docs/api-1.0.md §5](docs/api-1.0.md#5-semver-policy).
 
-## 1.1.0 — Unreleased
+## 1.1.0 — 2026-11-03
 
 Additive: no 1.0 API changes.
 
