@@ -67,11 +67,14 @@ public final class MilkRenderer {
     public var presetErrors: [String] {
         let shaders = active.shaders
         var errors = active.runtime.errors + shaders.errors
-        if !shaders.missingTextures.isEmpty {
-            errors.append("textures not available, noise used instead: \(shaders.missingTextures.joined(separator: ", "))")
+        let missing = shaders.missingTextures.filter { textureLibrary?.texture(named: $0) == nil }
+        if !missing.isEmpty {
+            errors.append("textures not available, noise used instead: \(missing.joined(separator: ", "))")
         }
         return errors
     }
+    /// Images for the disk textures preset shaders name; without one (or for names it lacks), noise stands in.
+    public var textureLibrary: MilkTextureLibrary?
     /// The pattern the next transitions use. MilkDrop 2 picks one at random each time (`.random`, the default).
     public var transitionPattern = MilkTransitionPattern.random
     /// True from a `load` with a transition until the outgoing preset has gone.
@@ -338,6 +341,7 @@ public final class MilkRenderer {
         let shaders = PresetShaders(preset: preset, device: device, warpFormat: Self.feedbackFormat,
                                     compositeFormat: pixelFormat, cache: pipelineCache,
                                     synchronous: !compilesShadersInBackground)
+        textureLibrary?.reshuffle()
         let outgoing = active
         active = loaded(preset, runtime: runtime, shaders: shaders)
         self.transition = transition > 0 && outgoing.preset != nil
@@ -683,12 +687,24 @@ public final class MilkRenderer {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else { return }
         encoder.label = "MilkRenderer.\(program.shader.stage.rawValue)Shader"
         encoder.setRenderPipelineState(program.pipeline)
+        // This pass's disk textures: library images where available (with their real sizes), noise otherwise.
+        var userTextures: [MTLTexture] = []
+        var uniforms = uniforms
+        let sizeBase = MemoryLayout<MilkShaderUniforms>.offset(of: \MilkShaderUniforms.texsizeUser)! / 16
+        for (i, name) in program.shader.userTextures.enumerated() {
+            let t = textureLibrary?.texture(named: name) ?? noise.mq
+            userTextures.append(t)
+            if sizeBase + i < uniforms.count {
+                let w = Float(t.width), h = Float(t.height)
+                uniforms[sizeBase + i] = [w, h, 1 / w, 1 / h]
+            }
+        }
         uniforms.withUnsafeBytes { raw in
             encoder.setFragmentBytes(raw.baseAddress!, length: raw.count, index: MilkShaderLayout.uniformsIndex)
         }
         encoder.setFragmentSamplerState(state.wrap ? samplers.linearWrap : samplers.linearClamp, index: 0)
         var textures: [MTLTexture?] = [main] + blur.vertical + noise.all
-        textures += Array(repeating: noise.mq, count: program.shader.userTextures.count)
+        textures += userTextures as [MTLTexture?]
         encoder.setFragmentTextures(textures, range: 0..<textures.count)
         if let mesh, let indexBuffer {
             encoder.setVertexBuffer(mesh, offset: 0, index: 0)
