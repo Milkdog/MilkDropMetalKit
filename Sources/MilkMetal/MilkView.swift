@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Metal
 import QuartzCore
@@ -78,3 +79,4 @@ public final class MilkView: NSView {
         commandBuffer.commit()
     }
 }
+#endif

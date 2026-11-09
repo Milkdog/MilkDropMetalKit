@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MilkDropMetalKit",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .tvOS(.v18), .iOS(.v17)],
     products: [
         .library(name: "MilkMetal", targets: ["MilkMetal"]),
         .executable(name: "milkconvert", targets: ["milkconvert"]),

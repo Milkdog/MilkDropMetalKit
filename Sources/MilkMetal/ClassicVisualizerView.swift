@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Metal
 import QuartzCore
@@ -83,3 +84,4 @@ public final class ClassicVisualizerView: NSView {
         commandBuffer.commit()
     }
 }
+#endif
